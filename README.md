@@ -180,3 +180,9 @@ Possible future improvements include:
 * Configuration files for simulation parameters
 * Improved separation between GUI and application logic
 * Packaging the application for easier installation
+
+## Author
+
+**Rujuta Joglekar**
+
+Project demonstrating software engineering, algorithms, simulation and database development
