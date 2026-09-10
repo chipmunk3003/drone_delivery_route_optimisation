@@ -3,11 +3,10 @@ from tkinter import messagebox
 from ui.widgets import PauseSimulationButton, ManualStartTourButton
 from PIL import Image, ImageTk
 import tkintermapview
-from pathlib import Path
-
 
 from simulation.geometry import distBetween
-from database.database import get_connection
+from database.orders import get_order_by_location, get_order_items
+
 
 # class to represent the left side of the display
 class MapFrame:
@@ -65,6 +64,7 @@ class MapFrame:
 		# updates the location entry box to show the current point selected
 		self.orderMenu.location.set(str(coords[0])+" "+str(coords[1]))
 
+
 	# displays the relevant information to the user when the drone is clicked
 	def droneClicked(self, marker):
 		# displays the drone battery
@@ -93,65 +93,49 @@ class MapFrame:
 		startTourButton.place()
 
 
+	# function to get the item and quantities selected in the clicked order
+	def getOrderItems(self, deliveryCoords):
+		# selects the orderId by the delivery coordinates
+		orderId = get_order_by_location(deliveryCoords[0],deliveryCoords[1])
+		# selects the product and quantity from the orderLine table using the orderId
+		results = get_order_items(orderId[0])
+		return results
+	
+
+	# calculates the expected time till delivery
+	def calcDeliveryTime(self, deliveryCoords, coordsToVisit):
+		
+		# only makes predictions if the order is currently in the batch being delivered
+		if deliveryCoords in coordsToVisit:
+			# calculates the distance between the drone and the next point it will visit
+			dist = distBetween(self.deliveryDrone.coords,coordsToVisit[0])
+
+			# iterates through the points the drone will visit, adding up the distance between it and the previous point
+			for i in range(0,len(coordsToVisit)):
+				# repeats until the clicked point is found and breaks
+				if coordsToVisit[i] != deliveryCoords:
+					dist += distBetween(coordsToVisit[i],coordsToVisit[i+1])
+				else:
+					break
+		# else return null value to indicate that no prediction made
+		else:
+			return None
+		
+		distM = dist*1000
+		timeSec = distM/20  # uses time = distance/speed to get time expected in seconds
+		
+		if self.chargingPointCoords in coordsToVisit or self.deliveryDrone.coords == self.chargingPointCoords:
+			timeToCharge = 600 * (100 - self.deliveryDrone.battery)/100
+			timeSec += timeToCharge
+		
+		# converts to minutes and seconds and returns
+		timeMin = int(timeSec // 60)
+		timeSec = int(timeSec % 60)
+		return timeMin,timeSec
+	
+
 	# function to show order details when a delivery point is clicked
 	def deliveryPointClicked(self,marker):
-
-		# function to get the item and quantities selected in the clicked order
-		def getOrderItems(deliveryCoords):
-			
-			#connects to database
-			conn = get_connection()
-			cursor = conn.cursor()
-			
-			# selects the orderId by the delivery coordinates
-			cursor.execute("SELECT orderId FROM orders WHERE deliveryLat = ? AND deliveryLong = ?",(deliveryCoords[0],deliveryCoords[1]))
-			orderId = cursor.fetchall()
-			
-			# selects the product and quantity from the orderLine table using the orderId
-			cursor.execute('''SELECT products.name, orderLine.quantity
-					 FROM orderLine
-					 JOIN products ON orderLine.productId = products.productId
-					 WHERE orderLine.orderId = ?
-					 ''',orderId[0])
-		
-			results = cursor.fetchall()
-			conn.commit()
-			
-			return results
-		
-
-		# calculates the expected time till delivery
-		def calcDeliveryTime(deliveryCoords, coordsToVisit):
-			
-			# only makes predictions if the order is currently in the batch being delivered
-			if deliveryCoords in coordsToVisit:
-				# calculates the distance between the drone and the next point it will visit
-				dist = distBetween(self.deliveryDrone.coords,coordsToVisit[0])
-
-				# iterates through the points the drone will visit, adding up the distance between it and the previous point
-				for i in range(0,len(coordsToVisit)):
-					# repeats until the clicked point is found and breaks
-					if coordsToVisit[i] != deliveryCoords:
-						dist += distBetween(coordsToVisit[i],coordsToVisit[i+1])
-					else:
-						break
-			# else return null value to indicate that no prediction made
-			else:
-				return None
-			
-			
-			distM = dist*1000
-			timeSec = distM/20  # uses time = distance/speed to get time expected in seconds
-			
-			if self.chargingPointCoords in coordsToVisit or self.deliveryDrone.coords == self.chargingPointCoords:
-				timeToCharge = 600 * (100 - self.deliveryDrone.battery)/100
-				timeSec += timeToCharge
-			
-			# converts to minutes and seconds and returns
-			timeMin = int(timeSec // 60)
-			timeSec = int(timeSec % 60)
-			return timeMin,timeSec
-
 
 		# iterates through all items in dictionary to get the coordinates of the marker clicked
 		for coords, pin in self.deliveryPointPins.items():
@@ -160,7 +144,7 @@ class MapFrame:
 				break
 		
 		# calls getOrderItems to get the list of products in that order
-		itemQuantityList = getOrderItems(markerCoords)
+		itemQuantityList = self.getOrderItems(markerCoords)
 
 		# formats and adds all the items and their quantities to a string message
 		orderItems = ""
@@ -169,7 +153,7 @@ class MapFrame:
 				orderItems += item + ": " + str(quantity)+ ". "
 			
 		# calls calcDeliveryTime to get the predicted time till delivery
-		deliveryTime = calcDeliveryTime(markerCoords,self.deliveryDrone.coordinatePath)
+		deliveryTime = self.calcDeliveryTime(markerCoords,self.deliveryDrone.coordinatePath)
 		
 		# checks if time predicted i.e if order items dispatched for delivery
 		# displays appropriate messages

@@ -2,29 +2,13 @@ from tkinter import *
 import time
 
 from ui.widgets import PlaceOrderButton, ItemNum, LabelBase
-from database.database import get_connection
 from database.inventory import get_warehouse_stock
-
+from database.orders import get_order_by_location, create_order, add_order_line
 
 
 #Displays the orderFrame with its contents
 class OrderFrame:
-	def __init__(self, parent):
-		
-		# function to get the total stock available when the program is started using the database
-		def getStartingTotals():
-			# selects the product name and the number available in warehouse 1 & 2
-			warehouse1Numbers = get_warehouse_stock(stockNum="stock1")
-			warehouse2Numbers = get_warehouse_stock(stockNum="stock2")
-			
-			totalStock = []  # initialises empty list for total stock
-			# iterates through each product available and sums the number available in each warehouse
-			for i in range(0,len(warehouse1Numbers)):
-				total = warehouse1Numbers[i][1] + warehouse2Numbers[i][1]
-				totalStock.append((warehouse1Numbers[i][0], total))  # adds the item name and the total number available to the total stock list
-				
-			return totalStock
-			
+	def __init__(self, parent):	
 
 		# starts off with all the values as 0 as no orders placed yet
 		self.totalOrdersQuanitities = [0,0,0,0,0,0,0,0]  
@@ -41,7 +25,7 @@ class OrderFrame:
 		orderInstruction = Label(self.orderFrame, text="Place a new order below:", font=("Arial", 14, "bold"), pady=10)
 		orderInstruction.grid(row=0, columnspan=4)  # places it at the top of the orderFrame
 		
-		totalStock = getStartingTotals()  # calls getStartingTotals to get the initial number for each slider
+		totalStock = self.getStartingTotals()  # calls getStartingTotals to get the initial number for each slider
 
 		#Adds each item and corresponding slider using the label base and itemNum classes
 		self.milkLabel = LabelBase(self.orderFrame, totalStock[0][0], 1,0)
@@ -73,6 +57,21 @@ class OrderFrame:
 		# creates and places the entry box with a the value entered stored in self.location
 		locationEntry = Entry(self.orderFrame, textvariable=self.location)
 		locationEntry.grid(row=10, column=1, columnspan=3, sticky="ew", padx=10)
+
+
+	# function to get the total stock available when the program is started using the database
+	def getStartingTotals(self):
+		# selects the product name and the number available in warehouse 1 & 2
+		warehouse1Numbers = get_warehouse_stock(stockNum="stock1")
+		warehouse2Numbers = get_warehouse_stock(stockNum="stock2")
+		
+		totalStock = []  # initialises empty list for total stock
+		# iterates through each product available and sums the number available in each warehouse
+		for i in range(0,len(warehouse1Numbers)):
+			total = warehouse1Numbers[i][1] + warehouse2Numbers[i][1]
+			totalStock.append((warehouse1Numbers[i][0], total))  # adds the item name and the total number available to the total stock list
+			
+		return totalStock
 		
 
 	def passObjects(self, mapDisplay, deliveryDrone):
@@ -100,20 +99,13 @@ class OrderFrame:
 		orderNum.append((5,self.cerealSlider.getValue()))
 		orderNum.append((6,self.breadSlider.getValue()))
 		orderNum.append((7,self.soupSlider.getValue()))
-		orderNum.append((8,self.medSlider.getValue()))
-		
-		# connects to the database
-		conn = get_connection()
-		cursor = conn.cursor()
+		orderNum.append((8,self.medSlider.getValue()))	
 		
 		# add entry to orders table for the order placed
-		cursor.execute('''INSERT INTO orders (deliveryLat, deliveryLong, orderWeight, timeOrderPlaced)
-					   VALUES (?,?,?,?)''', (self.mapDisplay.tempCoords[0], self.mapDisplay.tempCoords[1],self.orderQueue[len(self.orderQueue)-1][1],time.time()))
-		conn.commit()
+		create_order(self.mapDisplay.tempCoords[0], self.mapDisplay.tempCoords[1],self.orderQueue[len(self.orderQueue)-1][1],time.time())
 		
 		# gets the orderId of the order from the database table
-		cursor.execute("SELECT orderId FROM orders WHERE deliveryLat = ? AND deliveryLong = ?", (self.mapDisplay.tempCoords[0], self.mapDisplay.tempCoords[1]))
-		orderId = cursor.fetchone()
+		orderId = get_order_by_location(self.mapDisplay.tempCoords[0], self.mapDisplay.tempCoords[1])
 		orderId = orderId[0]
 		
 		# updates the orderId value of the order in orderQueue from -1
@@ -127,6 +119,7 @@ class OrderFrame:
 		
 		totalStock = []  # initialises the total stock and empty list
 		# iterates through each product
+
 		for i in range(0,len(orderNum)):
 		    # gets the number of that product ordered and increases this to the quantities of all the orders list
 			quantity = orderNum[i][1]
@@ -134,13 +127,9 @@ class OrderFrame:
 			# appends the product name and the total number of that item available to the totalStock list
 			stockNum = warehouse1Numbers[i][1] + warehouse2Numbers[i][1] - self.totalOrdersQuanitities[i]
 			totalStock.append((warehouse1Numbers[i][0], stockNum))
-			
 			# adds an entry for the product and the number ordered into the orderLine table
-			cursor.execute('''INSERT INTO orderLine(orderId, productId, quantity)
-				  VALUES (?,?,?)''', (orderId, i+1, quantity)) #add to orderline table
-			
-		conn.commit()
-			
+			add_order_line(orderId, i+1, quantity) #add to orderline table	
+
 		return totalStock
 		
 	

@@ -3,7 +3,7 @@ from tkinter import *
 from tkinter import messagebox
 import time
 
-from database.database import get_connection
+from database.inventory import get_product_weights
 
 
 
@@ -43,24 +43,6 @@ class PlaceOrderButton(ButtonBase):
 	
 	#implements the abstact method from button base
 	def action(self):		
-		#uses the database to calculate the total weight of the order
-		def getOrderWeight():
-			conn = get_connection()
-			cursor = conn.cursor()
-
-			#gets the weight of the eah product from the database
-			cursor.execute('SELECT weight FROM products')
-			weights = cursor.fetchall()
-
-			conn.commit()
-			conn.close()
-			
-			#multiplies the weight of each order by the quantity ordered
-			weight = self.orderMenu.milkSlider.getValue() * weights[0][0] + self.orderMenu.waterSlider.getValue() * weights[1][0] + self.orderMenu.pastaSlider.getValue() * weights[2][0] + self.orderMenu.tunaSlider.getValue() * weights[3][0] + self.orderMenu.cerealSlider.getValue() * weights[4][0] + self.orderMenu.breadSlider.getValue() *weights[5][0] + self.orderMenu.soupSlider.getValue()*weights[6][0] + self.orderMenu.medSlider.getValue()*weights[7][0]
-
-			return weight
-		
-
 		confirmed = messagebox.askokcancel("confirm order", "Are you sure you want to place this order?") 
 		
 		if confirmed:
@@ -85,7 +67,7 @@ class PlaceOrderButton(ButtonBase):
 			#checks if the delivery location is within the specified region
 			if self.mapDisplay.tempCoords[0]<51.7592733 and self.mapDisplay.tempCoords[1]<0.5149852 and self.mapDisplay.tempCoords[0]>51.7146676 and self.mapDisplay.tempCoords[1]> 0.4420291:
 			
-				orderWeight = getOrderWeight()
+				orderWeight = self.getOrderWeight()
 				# check that the weight of the order is within the max load that the drone can carry
 				if orderWeight < 15.9:
 				
@@ -114,6 +96,18 @@ class PlaceOrderButton(ButtonBase):
 
 		#updates the display for self.orderMenu
 		self.orderMenu.location.set("") 
+
+
+	#uses the database to calculate the total weight of the order
+	def getOrderWeight(self):
+		#gets the weight of the eah product from the database
+		weights = get_product_weights()
+		
+		#multiplies the weight of each order by the quantity ordered
+		weight = self.orderMenu.milkSlider.getValue() * weights[0][0] + self.orderMenu.waterSlider.getValue() * weights[1][0] + self.orderMenu.pastaSlider.getValue() * weights[2][0] + self.orderMenu.tunaSlider.getValue() * weights[3][0] + self.orderMenu.cerealSlider.getValue() * weights[4][0] + self.orderMenu.breadSlider.getValue() *weights[5][0] + self.orderMenu.soupSlider.getValue()*weights[6][0] + self.orderMenu.medSlider.getValue()*weights[7][0]
+
+		return weight
+
 		
 	#places the button in the appropriate location
 	def place(self):

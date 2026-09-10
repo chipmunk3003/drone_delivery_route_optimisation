@@ -5,32 +5,16 @@ from simulation.drone import Drone
 from ui.map_frame import MapFrame
 from ui.order_frame import OrderFrame
 from ui.widgets import *
-from database.database import get_connection
-
+from database.inventory import update_stock
+from database.orders import clear_orderInfo
 
 
 
 class DroneDeliveryApp():
 
-	def __init__(self):
-		# Connect to database file
-		conn = get_connection()
-		# Create a cursor object
-		cursor = conn.cursor()
-
-		cursor.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%';")
-		tables = cursor.fetchall()
-
-		for table in tables:
-			print(f"\nTable: {table[0]}")
-			cursor.execute(f"SELECT * FROM {table[0]}")
-			for row in cursor.fetchall():
-				print(row)
-			
+	def __init__(self):			
 		# clears the order and orderline tables every time program is run
-		cursor.execute("DELETE FROM orders")
-		cursor.execute("DELETE FROM orderLine")
-
+		clear_orderInfo()
 
 		# optionally replaces database values with vaues to test with
 		# prespecified values for the starting stock in each warehouse
@@ -42,21 +26,8 @@ class DroneDeliveryApp():
 		if replace:
 			# for each item updates the both warehouse stock values to show the starting quantities 
 			for i in range(0,len(startingStock1)):
-				
-				cursor.execute('''
-				UPDATE stock1
-				SET numAvailable = ?
-				WHERE productId = ?
-			''', (startingStock1[i], i+1))
-				
-				cursor.execute('''
-				UPDATE stock2
-				SET numAvailable = ?
-				WHERE productId = ?
-			''', (startingStock2[i], i+1))
-
-
-		conn.commit()
+				update_stock("stock1", startingStock1[i], i+1)
+				update_stock("stock2", startingStock2[i], i+1)
 
 
 		# Creates root window
